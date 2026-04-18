@@ -67,6 +67,10 @@ function App() {
   const [showPro, setShowPro] = useState(false);
   const [showLimit, setShowLimit] = useState(false);
   const [error, setError] = useState("");
+  const [shake, setShake] = useState(false);
+  const [invalidFields, setInvalidFields] = useState(false);
+  const [toast, setToast] = useState("");
+  const [counterFlash, setCounterFlash] = useState(false);
 
   const [uses, setUses] = useLocalNumber(STORAGE.uses);
   const [sent, setSent] = useLocalNumber(STORAGE.sent);
@@ -120,7 +124,12 @@ Do not include any markdown or explanations—only the subject line and body.`;
   const handleGenerate = async () => {
     setError("");
     if (!canGenerate) {
-      setError("Please fill in all fields.");
+      setShake(true);
+      setInvalidFields(true);
+      setToast("Please fill in all fields before generating");
+      setTimeout(() => setShake(false), 600);
+      setTimeout(() => setInvalidFields(false), 2000);
+      setTimeout(() => setToast(""), 3000);
       return;
     }
     if (uses >= FREE_LIMIT) {
@@ -151,6 +160,8 @@ Do not include any markdown or explanations—only the subject line and body.`;
       setUses(uses + 1);
       setSent(sent + 1);
       setOutstanding(outstanding + amt);
+      setCounterFlash(true);
+      setTimeout(() => setCounterFlash(false), 500);
     } catch (e) {
       setError("Something went wrong generating the email. Please try again.");
     } finally {
@@ -183,8 +194,8 @@ Do not include any markdown or explanations—only the subject line and body.`;
             </span>
             <span>InvoiceNudge</span>
           </div>
-          <div className="nav-pill" data-testid="nudge-counter">
-            <span className="nav-pill-dot" />
+          <div className={`nav-pill ${counterFlash ? "flash" : ""}`} data-testid="nudge-counter">
+            <span className={`nav-pill-dot ${uses >= FREE_LIMIT ? "red" : "green"}`} />
             <span>
               {uses} / {FREE_LIMIT} nudges used
             </span>
@@ -199,14 +210,21 @@ Do not include any markdown or explanations—only the subject line and body.`;
             <span className="accent">Nudge overdue invoices</span> in seconds.
           </h1>
           <p>
-            AI-written follow-up emails that get results — matched to your tone,
-            client, and how late they are. Free for your first {FREE_LIMIT} nudges.
+            Used by 1,000+ freelancers worldwide. Free for your first 5 nudges — no credit card, no signup needed.
           </p>
         </header>
 
+        <div className="trust-bar" data-testid="trust-bar">
+          <span>✦ No signup required</span>
+          <span className="trust-dot">·</span>
+          <span>✦ Works in any language</span>
+          <span className="trust-dot">·</span>
+          <span>✦ 5 free nudges every month</span>
+        </div>
+
         <div className="grid">
           {/* Invoice Details */}
-          <section className="card card-accent-left delay-1" data-testid="card-invoice-details">
+          <section className={`card card-accent-left delay-1 ${shake ? "shake" : ""}`} data-testid="card-invoice-details">
             <div className="card-header">
               <span className="card-header-icon"><FileText size={16} /></span>
               <span className="card-title">Invoice Details</span>
@@ -214,7 +232,7 @@ Do not include any markdown or explanations—only the subject line and body.`;
             <div className="form-grid">
               <div className="field full">
                 <label>Client Name</label>
-                <input
+                <input className={invalidFields ? "invalid" : ""}
                   data-testid="input-client-name"
                   value={form.clientName}
                   onChange={(e) => onChange("clientName", e.target.value)}
@@ -223,7 +241,7 @@ Do not include any markdown or explanations—only the subject line and body.`;
               </div>
               <div className="field">
                 <label>Invoice Amount</label>
-                <input
+                <input className={invalidFields ? "invalid" : ""}
                   data-testid="input-amount"
                   value={form.amount}
                   onChange={(e) => onChange("amount", e.target.value)}
@@ -232,7 +250,7 @@ Do not include any markdown or explanations—only the subject line and body.`;
               </div>
               <div className="field">
                 <label>Invoice Number</label>
-                <input
+                <input className={invalidFields ? "invalid" : ""}
                   data-testid="input-invoice-number"
                   value={form.invoiceNumber}
                   onChange={(e) => onChange("invoiceNumber", e.target.value)}
@@ -241,7 +259,7 @@ Do not include any markdown or explanations—only the subject line and body.`;
               </div>
               <div className="field">
                 <label>Days Overdue</label>
-                <input
+                <input className={invalidFields ? "invalid" : ""}
                   data-testid="input-days-overdue"
                   value={form.daysOverdue}
                   onChange={(e) => onChange("daysOverdue", e.target.value)}
@@ -250,7 +268,7 @@ Do not include any markdown or explanations—only the subject line and body.`;
               </div>
               <div className="field">
                 <label>Your Name</label>
-                <input
+                <input className={invalidFields ? "invalid" : ""}
                   data-testid="input-your-name"
                   value={form.yourName}
                   onChange={(e) => onChange("yourName", e.target.value)}
@@ -364,12 +382,12 @@ Do not include any markdown or explanations—only the subject line and body.`;
             <div className="output-wrap ghost">
               <div className="output-inner">
                 <div className="empty-output" data-testid="output-empty">
-                  <div className="dot"><Mail size={22} /></div>
+                  <div className="dot pulse"><Mail size={22} /></div>
                   <div style={{ color: "#E8E8F0", fontSize: 14, fontWeight: 500 }}>
-                    Your generated email will appear here
+                    Your professional follow-up is one click away
                   </div>
                   <div style={{ fontSize: 13 }}>
-                    Fill in the details, choose a tone, and hit generate.
+                    Fill in the details on the left, pick your tone, and generate. Takes 10 seconds.
                   </div>
                 </div>
               </div>
@@ -446,11 +464,18 @@ Do not include any markdown or explanations—only the subject line and body.`;
               <li><Check size={16} /> Late fee calculator</li>
               <li><Check size={16} /> Client history & notes</li>
             </ul>
-            <button type="button" data-testid="waitlist-button" className="modal-cta">
-              Coming Soon — Join Waitlist
-            </button>
+            <a
+              href="https://forms.gle/REPLACEWITHYOURGOOGLEFORMLINK"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="waitlist-button"
+              className="modal-cta"
+              style={{ display: "block", textAlign: "center", textDecoration: "none" }}
+            >
+              Join the Waitlist — It's Free
+            </a>
             <div className="modal-footnote">
-              Pro features launching soon. You'll be notified when available.
+              Pro launches soon. Waitlist members get 50% off forever.
             </div>
           </div>
         </div>
@@ -494,6 +519,14 @@ Do not include any markdown or explanations—only the subject line and body.`;
           </div>
         </div>
       )}
+
+      {toast && (
+        <div className="toast" data-testid="toast">{toast}</div>
+      )}
+
+      <footer className="footer" data-testid="footer">
+        InvoiceNudge © 2026 · Built for freelancers worldwide
+      </footer>
     </div>
   );
 }
