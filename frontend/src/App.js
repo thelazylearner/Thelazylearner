@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "@/App.css";
 import {
   Zap,
@@ -72,6 +72,9 @@ function App() {
   const [invalidFields, setInvalidFields] = useState(false);
   const [toast, setToast] = useState("");
   const [counterFlash, setCounterFlash] = useState(false);
+  const [slowHint, setSlowHint] = useState(false);
+  const slowTimerRef = useRef(null);
+  const outputRef = useRef(null);
 
   const [uses, setUses] = useLocalNumber(STORAGE.uses);
   const [sent, setSent] = useLocalNumber(STORAGE.sent);
@@ -90,11 +93,14 @@ function App() {
 
   const buildPrompt = () => {
     const toneLabel = TONES.find((t) => t.id === tone)?.title || "Friendly";
+    const invoiceLine = form.invoiceNumber.trim()
+      ? `- Invoice number: ${form.invoiceNumber}`
+      : `- Invoice number: (not provided — refer to the invoice generically, e.g. "your recent invoice" or "the outstanding invoice"; do NOT invent a number)`;
     return `You are an expert freelancer writing a ${toneLabel.toLowerCase()} follow-up email for an overdue invoice.
 
 Details:
 - Client name: ${form.clientName}
-- Invoice number: ${form.invoiceNumber}
+${invoiceLine}
 - Amount due: ${form.amount}
 - Days overdue: ${form.daysOverdue}
 - Sender: ${form.yourName}
@@ -114,7 +120,6 @@ Do not include any markdown or explanations—only the subject line and body.`;
     () =>
       form.clientName.trim() &&
       form.amount.toString().trim() &&
-      form.invoiceNumber.trim() &&
       form.daysOverdue.toString().trim() &&
       form.yourName.trim(),
     [form]
@@ -136,6 +141,9 @@ Do not include any markdown or explanations—only the subject line and body.`;
       return;
     }
     setLoading(true);
+    setSlowHint(false);
+    if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+    slowTimerRef.current = setTimeout(() => setSlowHint(true), 3000);
     setOutput({ subject: "", body: "" });
     try {
       const res = await fetch(GEMINI_URL, {
@@ -173,9 +181,15 @@ Do not include any markdown or explanations—only the subject line and body.`;
       } catch { /* noop */ }
       setCounterFlash(true);
       setTimeout(() => setCounterFlash(false), 500);
+      // Smooth-scroll to the generated email
+      setTimeout(() => {
+        outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 120);
     } catch (e) {
       setError("Something went wrong generating the email. Please try again.");
     } finally {
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+      setSlowHint(false);
       setLoading(false);
     }
   };
@@ -260,12 +274,14 @@ Do not include any markdown or explanations—only the subject line and body.`;
                 />
               </div>
               <div className="field">
-                <label>Invoice Number</label>
-                <input className={invalidFields ? "invalid" : ""}
+                <label>
+                  Invoice Number <span className="label-optional">(optional)</span>
+                </label>
+                <input
                   data-testid="input-invoice-number"
                   value={form.invoiceNumber}
                   onChange={(e) => onChange("invoiceNumber", e.target.value)}
-                  placeholder="e.g. INV-2025-047"
+                  placeholder="e.g. INV-047  (leave blank if unknown)"
                 />
               </div>
               <div className="field">
@@ -276,6 +292,7 @@ Do not include any markdown or explanations—only the subject line and body.`;
                   onChange={(e) => onChange("daysOverdue", e.target.value)}
                   placeholder="e.g. 14"
                 />
+                <div className="field-help">Not sure? Count days since the invoice due date.</div>
               </div>
               <div className="field">
                 <label>Your Name</label>
@@ -283,7 +300,7 @@ Do not include any markdown or explanations—only the subject line and body.`;
                   data-testid="input-your-name"
                   value={form.yourName}
                   onChange={(e) => onChange("yourName", e.target.value)}
-                  placeholder="e.g. Sarah Chen – Freelance Designer"
+                  placeholder="e.g. Sarah Chen"
                 />
               </div>
             </div>
@@ -320,7 +337,7 @@ Do not include any markdown or explanations—only the subject line and body.`;
               {loading ? (
                 <>
                   <span className="spinner" />
-                  <span>Generating...</span>
+                  <span>Generating your email...</span>
                 </>
               ) : (
                 <>
@@ -329,6 +346,12 @@ Do not include any markdown or explanations—only the subject line and body.`;
                 </>
               )}
             </button>
+
+            {loading && slowHint && (
+              <div className="slow-hint" data-testid="slow-hint">
+                Almost there — crafting the perfect tone for you...
+              </div>
+            )}
 
             {error && (
               <div
@@ -342,7 +365,7 @@ Do not include any markdown or explanations—only the subject line and body.`;
         </div>
 
         {/* Generated Email */}
-        <section style={{ marginTop: 20 }}>
+        <section style={{ marginTop: 20 }} ref={outputRef}>
           {output.body || loading ? (
             <div className={`output-wrap ${loading ? "ghost" : ""}`} data-testid="output-card">
               <div className="output-inner">

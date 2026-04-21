@@ -199,6 +199,29 @@
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
+.label-optional {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 11px;
+  margin-left: 6px;
+}
+.field-help {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 6px;
+  letter-spacing: -0.005em;
+  line-height: 1.4;
+}
+.slow-hint {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #A78BFA;
+  text-align: center;
+  animation: fadeIn 0.3s ease;
+  letter-spacing: -0.005em;
+}
 .field input {
   width: 100%;
   background: var(--input-bg);
