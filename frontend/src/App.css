@@ -772,6 +772,8 @@
   border-radius: 8px;
   margin-top: 12px;
   font-size: 13px;
+  word-break: break-word;
+  line-height: 1.45;
 }
 
 /* OTP boxes */

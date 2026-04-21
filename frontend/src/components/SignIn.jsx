@@ -42,7 +42,6 @@ export default function SignIn() {
   const [canResend, setCanResend] = useState(false);
 
   const otpRefs = useRef([]);
-  const recaptchaRef = useRef(null);
 
   // Countdown
   useEffect(() => {
@@ -60,14 +59,34 @@ export default function SignIn() {
     return () => clearInterval(interval);
   }, [step, confirmation]);
 
-  const ensureRecaptcha = () => {
-    if (!recaptchaRef.current) {
-      recaptchaRef.current = new RecaptchaVerifier(auth, "recaptcha-container", {
+  const ensureRecaptcha = async () => {
+    // Singleton on window so React re-renders / StrictMode never double-create it.
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
         size: "invisible",
       });
+      // Eager render so the widget is ready the moment the user clicks Send OTP.
+      try { await window.recaptchaVerifier.render(); } catch (e) { console.error("recaptcha render", e); }
     }
-    return recaptchaRef.current;
+    return window.recaptchaVerifier;
   };
+
+  const resetRecaptcha = () => {
+    try { window.recaptchaVerifier?.clear(); } catch { /* noop */ }
+    const el = document.getElementById("recaptcha-container");
+    if (el) el.innerHTML = "";
+    window.recaptchaVerifier = null;
+  };
+
+  // Initialize recaptcha verifier ONCE on mount.
+  useEffect(() => {
+    ensureRecaptcha();
+    return () => {
+      // Keep the verifier alive across step changes; only nuke on unmount.
+      resetRecaptcha();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fullPhone = useMemo(
     () => `${country.dial}${phone.replace(/[^0-9]/g, "")}`,
@@ -83,17 +102,22 @@ export default function SignIn() {
     }
     setSending(true);
     try {
-      const verifier = ensureRecaptcha();
+      const verifier = await ensureRecaptcha();
       const result = await signInWithPhoneNumber(auth, fullPhone, verifier);
       setConfirmation(result);
       setStep("otp");
       setOtp(Array(6).fill(""));
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } catch (e) {
-      console.error(e);
-      setError(e?.message?.replace("Firebase: ", "") || "Could not send OTP. Try again.");
-      try { recaptchaRef.current?.clear(); } catch { /* noop */ }
-      recaptchaRef.current = null;
+      console.error("signInWithPhoneNumber failed", e);
+      // Show exact Firebase error code + message so the user can act on it.
+      const code = e?.code ? `[${e.code}] ` : "";
+      const msg = e?.message ? e.message.replace("Firebase: ", "") : "Could not send OTP.";
+      const host = typeof window !== "undefined" ? window.location.hostname : "";
+      setError(`${code}${msg}${host ? ` · origin: ${host}` : ""}`);
+      // Recreate the verifier for the next attempt (required after a failure).
+      resetRecaptcha();
+      await ensureRecaptcha();
     } finally {
       setSending(false);
     }
@@ -102,8 +126,8 @@ export default function SignIn() {
   const resendOtp = async () => {
     if (!canResend) return;
     setConfirmation(null);
-    try { recaptchaRef.current?.clear(); } catch { /* noop */ }
-    recaptchaRef.current = null;
+    resetRecaptcha();
+    await ensureRecaptcha();
     setStep("phone");
     setTimeout(sendOtp, 50);
   };
@@ -289,7 +313,7 @@ export default function SignIn() {
           </>
         )}
 
-        <div id="recaptcha-container" />
+        <div id="recaptcha-container" style={{ display: "none" }} />
       </div>
     </div>
   );
