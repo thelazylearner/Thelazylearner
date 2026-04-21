@@ -79,6 +79,31 @@ function App() {
   const [recoveryPrompt, setRecoveryPrompt] = useState(null); // { client, amount, invoice }
   const [recoveryWin, setRecoveryWin] = useState(null); // { client, amount } after mark-paid
 
+  // A/B price test — assigned once per browser, 50/50 split.
+  const [priceVariant] = useState(() => {
+    let v = localStorage.getItem("invoicenudge_price_variant");
+    if (v !== "a" && v !== "b") {
+      v = Math.random() < 0.5 ? "a" : "b";
+      localStorage.setItem("invoicenudge_price_variant", v);
+    }
+    return v;
+  });
+  const priceLabel = priceVariant === "b" ? "$12" : "$7";
+  // Log impression once per session per variant.
+  useEffect(() => {
+    const k = `invoicenudge_imp_${priceVariant}`;
+    if (!sessionStorage.getItem(k)) {
+      sessionStorage.setItem(k, "1");
+      const n = Number(localStorage.getItem(k) || 0) + 1;
+      localStorage.setItem(k, String(n));
+    }
+  }, [priceVariant]);
+  const trackUpgradeClick = () => {
+    const k = `invoicenudge_click_${priceVariant}`;
+    const n = Number(localStorage.getItem(k) || 0) + 1;
+    localStorage.setItem(k, String(n));
+  };
+
   const [uses, setUses] = useLocalNumber(STORAGE.uses);
   const [sent, setSent] = useLocalNumber(STORAGE.sent);
   const [outstanding, setOutstanding] = useLocalNumber(STORAGE.outstanding);
@@ -606,24 +631,38 @@ Thanks,
         )}
 
         {/* Pro Banner */}
-        <div className="pro-banner" data-testid="pro-banner">
-          <div className="pro-left">
-            <div className="pro-title">Unlock Pro</div>
-            <div className="pro-pills">
-              <span className="pro-pill">Unlimited nudges</span>
-              <span className="pro-pill">Auto-send</span>
-              <span className="pro-pill">Payment tracker</span>
-              <span className="pro-pill">WhatsApp templates</span>
+        <div className="pro-banner" data-testid="pro-banner" data-variant={priceVariant}>
+          <div className="pro-content">
+            <div className="pro-head">
+              <div className="pro-headline">Stop losing money to ignored invoices.</div>
+              <div className="pro-sub">Pro users recover an average of $1,840 in overdue payments.</div>
+            </div>
+            <div className="pro-grid">
+              <div className="pro-value">
+                <div className="pro-value-title">Auto-send sequences</div>
+                <div className="pro-value-desc">Set a 3-email drip. We send it for you.</div>
+              </div>
+              <div className="pro-value">
+                <div className="pro-value-title">Recovery dashboard</div>
+                <div className="pro-value-desc">See every dollar you've chased and recovered.</div>
+              </div>
+              <div className="pro-value">
+                <div className="pro-value-title">WhatsApp templates</div>
+                <div className="pro-value-desc">Follow up where clients actually respond.</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              data-testid="upgrade-button"
+              className="upgrade-btn pro-cta"
+              onClick={() => { trackUpgradeClick(); setShowPro(true); }}
+            >
+              Start recovering more — {priceLabel}/mo
+            </button>
+            <div className="pro-trust" data-testid="pro-trust">
+              Cancel anytime · No contract · 14-day money-back guarantee
             </div>
           </div>
-          <button
-            type="button"
-            data-testid="upgrade-button"
-            className="upgrade-btn"
-            onClick={() => setShowPro(true)}
-          >
-            Upgrade — $7/mo
-          </button>
         </div>
 
         {recoveryPrompt && (
@@ -680,7 +719,7 @@ Thanks,
               <BoltIcon size={24} />
             </div>
             <h3 className="modal-title">InvoiceNudge Pro</h3>
-            <div className="modal-price">$7 <span style={{ fontSize: 16, color: "var(--label)", fontWeight: 500 }}>/ month</span></div>
+            <div className="modal-price">{priceLabel} <span style={{ fontSize: 16, color: "var(--label)", fontWeight: 500 }}>/ month</span></div>
             <div className="modal-cancel">Cancel anytime · No hidden fees</div>
             <ul className="modal-features">
               <li><Check size={16} /> Unlimited email generations</li>
@@ -737,7 +776,7 @@ Thanks,
               className="modal-cta"
               onClick={() => { setShowLimit(false); setShowPro(true); }}
             >
-              See Pro plans — $7/mo
+              See Pro plans — {priceLabel}/mo
             </button>
             <div className="modal-footnote">
               Free tier resets are coming soon — stay tuned.
