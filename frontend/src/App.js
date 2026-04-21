@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "@/App.css";
 import {
   Zap,
@@ -12,16 +12,19 @@ import {
   X,
   Sparkles,
   Lock,
-  LogOut,
-  User as UserIcon,
 } from "lucide-react";
-import { useAuth } from "@/lib/auth";
-import SignIn from "@/components/SignIn";
 
 const GEMINI_API_KEY = "AIzaSyDec_AOK4e6xj30WQHgvpsldn68i_AEppg";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 const FREE_LIMIT = 5;
+const STORAGE = {
+  uses: "invoicenudge_uses",
+  sent: "invoicenudge_sent",
+  outstanding: "invoicenudge_outstanding",
+  recovered: "invoicenudge_recovered",
+  history: "invoicenudge_history",
+};
 
 const TONES = [
   { id: "friendly", title: "Friendly", sub: "Polite reminder" },
@@ -34,6 +37,14 @@ const fmtMoney = (v) => {
   return isFinite(n) ? n : 0;
 };
 
+function useLocalNumber(key) {
+  const [val, setVal] = useState(() => Number(localStorage.getItem(key) || 0));
+  useEffect(() => {
+    localStorage.setItem(key, String(val));
+  }, [key, val]);
+  return [val, setVal];
+}
+
 function BoltIcon({ size = 16 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -43,7 +54,6 @@ function BoltIcon({ size = 16 }) {
 }
 
 function App() {
-  const { user, userDoc, ready, updateUser, signOut } = useAuth();
   const [form, setForm] = useState({
     clientName: "",
     amount: "",
@@ -57,28 +67,16 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [showPro, setShowPro] = useState(false);
   const [showLimit, setShowLimit] = useState(false);
-  const [showAccount, setShowAccount] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
   const [invalidFields, setInvalidFields] = useState(false);
   const [toast, setToast] = useState("");
   const [counterFlash, setCounterFlash] = useState(false);
-  const menuRef = useRef(null);
 
-  const uses = userDoc?.nudgesUsed || 0;
-  const sent = userDoc?.nudgesUsed || 0;
-  const outstanding = userDoc?.outstanding || 0;
-  const recovered = userDoc?.recovered || 0;
-  const isPro = !!userDoc?.isPro;
-
-  useEffect(() => {
-    const onClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
+  const [uses, setUses] = useLocalNumber(STORAGE.uses);
+  const [sent, setSent] = useLocalNumber(STORAGE.sent);
+  const [outstanding, setOutstanding] = useLocalNumber(STORAGE.outstanding);
+  const [recovered] = useLocalNumber(STORAGE.recovered);
 
   const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -133,7 +131,7 @@ Do not include any markdown or explanations—only the subject line and body.`;
       setTimeout(() => setToast(""), 3000);
       return;
     }
-    if (uses >= FREE_LIMIT && !isPro) {
+    if (uses >= FREE_LIMIT) {
       setShowLimit(true);
       return;
     }
@@ -156,24 +154,23 @@ Do not include any markdown or explanations—only the subject line and body.`;
       const parsed = parseEmail(text);
       setOutput(parsed);
 
-      // Update counters (Firestore)
+      // Update counters (localStorage)
       const amt = fmtMoney(form.amount);
-      const history = userDoc?.nudgeHistory || [];
-      await updateUser({
-        nudgesUsed: uses + 1,
-        outstanding: outstanding + amt,
-        nudgeHistory: [
-          ...history,
-          {
-            at: Date.now(),
-            client: form.clientName,
-            invoice: form.invoiceNumber,
-            amount: amt,
-            tone,
-            subject: parsed.subject,
-          },
-        ],
-      });
+      setUses(uses + 1);
+      setSent(sent + 1);
+      setOutstanding(outstanding + amt);
+      try {
+        const history = JSON.parse(localStorage.getItem(STORAGE.history) || "[]");
+        history.push({
+          at: Date.now(),
+          client: form.clientName,
+          invoice: form.invoiceNumber,
+          amount: amt,
+          tone,
+          subject: parsed.subject,
+        });
+        localStorage.setItem(STORAGE.history, JSON.stringify(history));
+      } catch { /* noop */ }
       setCounterFlash(true);
       setTimeout(() => setCounterFlash(false), 500);
     } catch (e) {
@@ -194,22 +191,6 @@ Do not include any markdown or explanations—only the subject line and body.`;
     }
   };
 
-  if (!ready) {
-    return (
-      <div className="app-shell" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-        <div className="top-gradient" />
-        <div className="bg-glow" />
-        <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <SignIn />;
-  }
-
-  const phoneLast2 = (userDoc?.phoneNumber || user.phoneNumber || "").slice(-2) || "··";
-
   return (
     <div className="app-shell">
       <div className="top-gradient" />
@@ -224,48 +205,11 @@ Do not include any markdown or explanations—only the subject line and body.`;
             </span>
             <span>InvoiceNudge</span>
           </div>
-          <div className="nav-right">
-            <div className={`nav-pill ${counterFlash ? "flash" : ""}`} data-testid="nudge-counter">
-              <span className={`nav-pill-dot ${uses >= FREE_LIMIT && !isPro ? "red" : "green"}`} />
-              <span>
-                {isPro ? "Pro · unlimited" : `${uses} / ${FREE_LIMIT} nudges used`}
-              </span>
-            </div>
-            <div className="avatar-wrap" ref={menuRef}>
-              <button
-                type="button"
-                className="avatar-btn"
-                data-testid="avatar-button"
-                onClick={() => setMenuOpen((v) => !v)}
-                aria-label="Account menu"
-              >
-                {phoneLast2}
-              </button>
-              {menuOpen && (
-                <div className="avatar-menu" data-testid="avatar-menu">
-                  <div className="avatar-menu-head">
-                    <div className="avatar-menu-phone">{userDoc?.phoneNumber || user.phoneNumber}</div>
-                    <div className="avatar-menu-sub">{isPro ? "Pro member" : `${Math.max(0, FREE_LIMIT - uses)} free nudges left`}</div>
-                  </div>
-                  <button
-                    type="button"
-                    className="avatar-menu-item"
-                    data-testid="menu-account"
-                    onClick={() => { setMenuOpen(false); setShowAccount(true); }}
-                  >
-                    <UserIcon size={14} /> My account
-                  </button>
-                  <button
-                    type="button"
-                    className="avatar-menu-item danger"
-                    data-testid="menu-signout"
-                    onClick={() => { setMenuOpen(false); signOut(); }}
-                  >
-                    <LogOut size={14} /> Sign out
-                  </button>
-                </div>
-              )}
-            </div>
+          <div className={`nav-pill ${counterFlash ? "flash" : ""}`} data-testid="nudge-counter">
+            <span className={`nav-pill-dot ${uses >= FREE_LIMIT ? "red" : "green"}`} />
+            <span>
+              {uses} / {FREE_LIMIT} nudges used
+            </span>
           </div>
         </div>
       </nav>
@@ -371,7 +315,7 @@ Do not include any markdown or explanations—only the subject line and body.`;
               data-testid="generate-button"
               className="btn-primary"
               onClick={handleGenerate}
-              disabled={loading || (uses >= FREE_LIMIT && !isPro)}
+              disabled={loading}
             >
               {loading ? (
                 <>
@@ -583,63 +527,6 @@ Do not include any markdown or explanations—only the subject line and body.`;
             <div className="modal-footnote">
               Free tier resets are coming soon — stay tuned.
             </div>
-          </div>
-        </div>
-      )}
-
-      {showAccount && (
-        <div className="modal-overlay" onClick={() => setShowAccount(false)}>
-          <div className="modal" data-testid="account-modal" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              data-testid="account-modal-close"
-              className="modal-close"
-              onClick={() => setShowAccount(false)}
-              aria-label="Close"
-            >
-              <X size={20} />
-            </button>
-            <div className="modal-bolt"><UserIcon size={22} /></div>
-            <h3 className="modal-title">My account</h3>
-            <div style={{ color: "var(--label)", fontSize: 13, marginBottom: 18 }}>
-              Signed in with <span style={{ color: "#A78BFA" }}>{userDoc?.phoneNumber || user.phoneNumber}</span>
-            </div>
-
-            <div className="account-stats">
-              <div className="account-stat">
-                <div className="account-stat-num">{uses}</div>
-                <div className="account-stat-label">Lifetime nudges</div>
-              </div>
-              <div className="account-stat">
-                <div className="account-stat-num">${outstanding.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                <div className="account-stat-label">Outstanding</div>
-              </div>
-              <div className="account-stat">
-                <div className="account-stat-num">{isPro ? "Pro" : "Free"}</div>
-                <div className="account-stat-label">Plan</div>
-              </div>
-            </div>
-
-            {!isPro && (
-              <button
-                type="button"
-                className="modal-cta"
-                data-testid="account-upgrade"
-                onClick={() => { setShowAccount(false); setShowPro(true); }}
-                style={{ marginTop: 20 }}
-              >
-                Upgrade to Pro — $7/mo
-              </button>
-            )}
-            <button
-              type="button"
-              data-testid="account-signout"
-              onClick={() => { setShowAccount(false); signOut(); }}
-              className="copy-btn"
-              style={{ width: "100%", marginTop: 10, padding: "12px", justifyContent: "center" }}
-            >
-              Sign out
-            </button>
           </div>
         </div>
       )}
