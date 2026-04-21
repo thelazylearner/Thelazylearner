@@ -12,6 +12,8 @@ import {
   X,
   Sparkles,
   Lock,
+  Clock,
+  ChevronDown,
 } from "lucide-react";
 
 const GEMINI_API_KEY = "AIzaSyDec_AOK4e6xj30WQHgvpsldn68i_AEppg";
@@ -102,6 +104,112 @@ function App() {
     const k = `invoicenudge_click_${priceVariant}`;
     const n = Number(localStorage.getItem(k) || 0) + 1;
     localStorage.setItem(k, String(n));
+  };
+
+  // ===== Recovery Sequence (Pro-tier) =====
+  const [leftTab, setLeftTab] = useState("details"); // "details" | "sequence"
+  const [isPro, setIsPro] = useState(() => localStorage.getItem("invoicenudge_is_pro") === "true");
+  useEffect(() => {
+    const h = () => setIsPro(localStorage.getItem("invoicenudge_is_pro") === "true");
+    window.addEventListener("storage", h);
+    return () => window.removeEventListener("storage", h);
+  }, []);
+  const SEQUENCE_DEFAULTS = [
+    { day: 1, tone: "friendly" },
+    { day: 7, tone: "firm" },
+    { day: 14, tone: "final" },
+  ];
+  const [sequence, setSequence] = useState(() =>
+    SEQUENCE_DEFAULTS.map((s) => ({ ...s, loading: false, error: "", output: null }))
+  );
+  const DAY_OPTIONS = [1, 3, 5, 7, 10, 14, 21];
+  const TONE_META = {
+    friendly: { label: "Friendly", color: "green" },
+    firm: { label: "Firm", color: "amber" },
+    final: { label: "Final Notice", color: "red" },
+  };
+
+  const buildSequencePrompt = (idx) => {
+    const step = sequence[idx];
+    const toneLabel = TONE_META[step.tone].label;
+    const attemptOrdinal = ["1st", "2nd", "3rd"][idx];
+    const prev = idx > 0 ? sequence[idx - 1] : null;
+    const prevNote = prev?.output
+      ? `Previous email subject: "${prev.output.subject}" (sent ${sequence[idx].day - prev.day} days before this one). Subtly acknowledge it — e.g. "Following up on my previous email" — without quoting it verbatim.`
+      : "This is the first email in the sequence.";
+    const invoiceLine = form.invoiceNumber.trim()
+      ? `- Invoice number: ${form.invoiceNumber}`
+      : `- Invoice number: (not provided — refer generically, do NOT invent a number)`;
+    return `You are writing the ${attemptOrdinal} email in a 3-email follow-up sequence for an overdue invoice.
+
+Invoice context:
+- Client name: ${form.clientName}
+${invoiceLine}
+- Amount due: ${form.amount}
+- Original days overdue (at start of sequence): ${form.daysOverdue}
+- Sender: ${form.yourName}
+
+This is email #${idx + 1} — tone: ${toneLabel}.
+${prevNote}
+
+Tone guidance:
+- Friendly: warm, polite, assumes it's an oversight
+- Firm: professional, direct, mentions terms and requests immediate action
+- Final Notice: serious, references potential next steps (late fees, collections) while remaining professional
+
+Output format (strict):
+Subject: <one concise subject line>
+<blank line, then body. Natural line breaks. Sign off with "Best," and the sender's name.>
+Do not include markdown or explanations — only the subject line and body.`;
+  };
+
+  const generateSequenceStep = async (idx) => {
+    if (idx > 0 && !isPro) {
+      trackUpgradeClick();
+      setShowPro(true);
+      return;
+    }
+    if (!canGenerate) {
+      setLeftTab("details");
+      setShake(true);
+      setInvalidFields(true);
+      setToast("Fill in the invoice details first");
+      setTimeout(() => setShake(false), 600);
+      setTimeout(() => setInvalidFields(false), 2000);
+      setTimeout(() => setToast(""), 3000);
+      return;
+    }
+    if (!isPro && uses >= FREE_LIMIT) {
+      setShowLimit(true);
+      return;
+    }
+    setSequence((s) => s.map((st, i) => i === idx ? { ...st, loading: true, error: "" } : st));
+    try {
+      const res = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: buildSequencePrompt(idx) }] }] }),
+      });
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      if (!text) throw new Error("empty");
+      const parsed = parseEmail(text);
+      setSequence((s) => s.map((st, i) => i === idx ? { ...st, loading: false, output: parsed } : st));
+      if (idx === 0 && !isPro) {
+        setUses(uses + 1);
+        setSent(sent + 1);
+      }
+    } catch {
+      setSequence((s) => s.map((st, i) => i === idx ? { ...st, loading: false, error: "Could not generate. Try again." } : st));
+    }
+  };
+
+  const updateStepDay = (idx, day) => setSequence((s) => s.map((st, i) => i === idx ? { ...st, day } : st));
+
+  const scheduleSequence = () => {
+    if (!isPro) { trackUpgradeClick(); setShowPro(true); return; }
+    setToast("Sequence scheduled! We'll send each email automatically.");
+    setTimeout(() => setToast(""), 3500);
   };
 
   const [uses, setUses] = useLocalNumber(STORAGE.uses);
@@ -387,62 +495,173 @@ Do not include any markdown or explanations—only the subject line and body.`;
         </div>
 
         <div className="grid">
-          {/* Invoice Details */}
+          {/* Invoice Details / Recovery Sequence */}
           <section className={`card card-accent-left delay-1 ${shake ? "shake" : ""}`} data-testid="card-invoice-details">
-            <div className="card-header">
-              <span className="card-header-icon"><FileText size={16} /></span>
-              <span className="card-title">Invoice Details</span>
+            <div className="tab-bar" data-testid="tab-bar">
+              <button
+                type="button"
+                className={`tab-btn ${leftTab === "details" ? "active" : ""}`}
+                data-testid="tab-details"
+                onClick={() => setLeftTab("details")}
+              >
+                <FileText size={14} /> Invoice Details
+              </button>
+              <button
+                type="button"
+                className={`tab-btn ${leftTab === "sequence" ? "active" : ""}`}
+                data-testid="tab-sequence"
+                onClick={() => setLeftTab("sequence")}
+              >
+                <Clock size={14} /> Recovery Sequence
+                <span className="tab-pro-badge">PRO</span>
+              </button>
             </div>
-            <div className="form-grid">
-              <div className="field full">
-                <label>Client Name</label>
-                <input className={invalidFields ? "invalid" : ""}
-                  data-testid="input-client-name"
-                  value={form.clientName}
-                  onChange={(e) => onChange("clientName", e.target.value)}
-                  placeholder="e.g. Acme Studios"
-                />
+
+            {leftTab === "details" ? (
+              <div className="form-grid">
+                <div className="field full">
+                  <label>Client Name</label>
+                  <input className={invalidFields ? "invalid" : ""}
+                    data-testid="input-client-name"
+                    value={form.clientName}
+                    onChange={(e) => onChange("clientName", e.target.value)}
+                    placeholder="e.g. Acme Studios"
+                  />
+                </div>
+                <div className="field">
+                  <label>Invoice Amount</label>
+                  <input className={invalidFields ? "invalid" : ""}
+                    data-testid="input-amount"
+                    value={form.amount}
+                    onChange={(e) => onChange("amount", e.target.value)}
+                    placeholder="e.g. $2,400.00"
+                  />
+                </div>
+                <div className="field">
+                  <label>
+                    Invoice Number <span className="label-optional">(optional)</span>
+                  </label>
+                  <input
+                    data-testid="input-invoice-number"
+                    value={form.invoiceNumber}
+                    onChange={(e) => onChange("invoiceNumber", e.target.value)}
+                    placeholder="e.g. INV-047  (leave blank if unknown)"
+                  />
+                </div>
+                <div className="field">
+                  <label>Days Overdue</label>
+                  <input className={invalidFields ? "invalid" : ""}
+                    data-testid="input-days-overdue"
+                    value={form.daysOverdue}
+                    onChange={(e) => onChange("daysOverdue", e.target.value)}
+                    placeholder="e.g. 14"
+                  />
+                  <div className="field-help">Not sure? Count days since the invoice due date.</div>
+                </div>
+                <div className="field">
+                  <label>Your Name</label>
+                  <input className={invalidFields ? "invalid" : ""}
+                    data-testid="input-your-name"
+                    value={form.yourName}
+                    onChange={(e) => onChange("yourName", e.target.value)}
+                    placeholder="e.g. Sarah Chen"
+                  />
+                </div>
               </div>
-              <div className="field">
-                <label>Invoice Amount</label>
-                <input className={invalidFields ? "invalid" : ""}
-                  data-testid="input-amount"
-                  value={form.amount}
-                  onChange={(e) => onChange("amount", e.target.value)}
-                  placeholder="e.g. $2,400.00"
-                />
+            ) : (
+              <div className="sequence" data-testid="sequence">
+                {sequence.map((step, idx) => {
+                  const tone = TONE_META[step.tone];
+                  const locked = idx > 0 && !isPro;
+                  return (
+                    <div
+                      key={idx}
+                      className={`seq-step ${locked ? "locked" : ""}`}
+                      data-testid={`seq-step-${idx}`}
+                    >
+                      <div className="seq-rail">
+                        <div className={`seq-dot ${tone.color}`} />
+                        {idx < sequence.length - 1 && <div className="seq-line" />}
+                      </div>
+                      <div className="seq-body">
+                        <div className="seq-head">
+                          <div className="seq-title-row">
+                            <select
+                              className="seq-day"
+                              data-testid={`seq-day-${idx}`}
+                              value={step.day}
+                              onChange={(e) => updateStepDay(idx, Number(e.target.value))}
+                              disabled={locked}
+                            >
+                              {DAY_OPTIONS.map((d) => (
+                                <option key={d} value={d}>Day {d}</option>
+                              ))}
+                            </select>
+                            <span className={`seq-tone-badge tone-${tone.color}`}>{tone.label}</span>
+                            {locked && <span className="seq-lock-badge"><Lock size={10} /> PRO</span>}
+                          </div>
+                          <button
+                            type="button"
+                            className={`seq-generate-btn ${locked ? "locked" : ""}`}
+                            data-testid={`seq-generate-${idx}`}
+                            onClick={() => generateSequenceStep(idx)}
+                            disabled={step.loading}
+                          >
+                            {step.loading ? (
+                              <><span className="spinner" /> Generating...</>
+                            ) : locked ? (
+                              <><Lock size={13} /> Unlock Email {idx + 1}</>
+                            ) : (
+                              <>Generate Email {idx + 1}</>
+                            )}
+                          </button>
+                        </div>
+
+                        {step.output && !locked && (
+                          <div className="seq-preview" data-testid={`seq-preview-${idx}`}>
+                            <div className="seq-preview-subject">
+                              <span>Subject:</span> {step.output.subject}
+                            </div>
+                            <div className="seq-preview-body">{step.output.body}</div>
+                          </div>
+                        )}
+                        {locked && (
+                          <div className="seq-preview seq-preview-locked" data-testid={`seq-locked-${idx}`}>
+                            <div className="seq-preview-subject" style={{ filter: "blur(4px)" }}>
+                              <span>Subject:</span> [Locked — Pro only]
+                            </div>
+                            <div className="seq-preview-body" style={{ filter: "blur(4px)" }}>
+                              Upgrade to Pro to unlock automated {tone.label.toLowerCase()} follow-up #{idx + 1}. Each email references the prior one and escalates naturally...
+                            </div>
+                            <div className="seq-locked-overlay">
+                              <Lock size={18} />
+                              <span>Unlock with Pro</span>
+                            </div>
+                          </div>
+                        )}
+                        {step.error && <div className="signin-error" style={{ marginTop: 10 }}>{step.error}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div className="seq-schedule-row">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    data-testid="schedule-sequence"
+                    onClick={scheduleSequence}
+                  >
+                    {isPro ? "Schedule entire sequence" : (<><Lock size={14} /> Schedule entire sequence — Upgrade to Pro</>)}
+                  </button>
+                  <div className="seq-schedule-hint">
+                    {isPro
+                      ? "We'll auto-send each email on its scheduled day via your connected inbox."
+                      : `Pro users auto-send all 3 emails on schedule. Upgrade for ${priceLabel}/mo.`}
+                  </div>
+                </div>
               </div>
-              <div className="field">
-                <label>
-                  Invoice Number <span className="label-optional">(optional)</span>
-                </label>
-                <input
-                  data-testid="input-invoice-number"
-                  value={form.invoiceNumber}
-                  onChange={(e) => onChange("invoiceNumber", e.target.value)}
-                  placeholder="e.g. INV-047  (leave blank if unknown)"
-                />
-              </div>
-              <div className="field">
-                <label>Days Overdue</label>
-                <input className={invalidFields ? "invalid" : ""}
-                  data-testid="input-days-overdue"
-                  value={form.daysOverdue}
-                  onChange={(e) => onChange("daysOverdue", e.target.value)}
-                  placeholder="e.g. 14"
-                />
-                <div className="field-help">Not sure? Count days since the invoice due date.</div>
-              </div>
-              <div className="field">
-                <label>Your Name</label>
-                <input className={invalidFields ? "invalid" : ""}
-                  data-testid="input-your-name"
-                  value={form.yourName}
-                  onChange={(e) => onChange("yourName", e.target.value)}
-                  placeholder="e.g. Sarah Chen"
-                />
-              </div>
-            </div>
+            )}
           </section>
 
           {/* Escalation Tone */}
