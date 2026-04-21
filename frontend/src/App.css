@@ -640,3 +640,262 @@
   padding: 20px 0;
   margin-top: 40px;
 }
+
+/* ===== Sign-in screen ===== */
+.signin-shell {
+  min-height: 100vh;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  position: relative;
+}
+.signin-card {
+  position: relative;
+  z-index: 1;
+  background: #1A1A24;
+  border: 1px solid #2A2A3A;
+  border-radius: 20px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 30px 80px -20px rgba(0,0,0,0.7), 0 0 60px rgba(124,106,247,0.08);
+  animation: fadeInUp 0.4s ease;
+}
+.signin-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 16px;
+  color: #fff;
+  margin-bottom: 28px;
+  letter-spacing: -0.02em;
+}
+.signin-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.03em;
+  margin: 0 0 8px;
+}
+.signin-sub {
+  color: var(--label);
+  font-size: 14px;
+  margin: 0 0 28px;
+  line-height: 1.5;
+}
+
+.phone-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.country-picker-wrap { position: relative; }
+.country-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text);
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  height: 48px;
+  min-width: 108px;
+  transition: border-color 0.15s ease;
+}
+.country-btn:hover { border-color: #3A3A50; }
+.country-btn .flag { font-size: 18px; }
+
+.country-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  background: #1A1A24;
+  border: 1px solid #2A2A3A;
+  border-radius: 12px;
+  min-width: 260px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+}
+.country-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.1s ease;
+}
+.country-item:hover { background: rgba(124,106,247,0.08); }
+.country-item .country-name { flex: 1; text-align: left; }
+.country-item .country-dial { color: var(--label); font-size: 13px; }
+
+.phone-input {
+  flex: 1;
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text);
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 15px;
+  outline: none;
+  letter-spacing: 0.02em;
+  height: 48px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.phone-input::placeholder { color: #4A4A60; }
+.phone-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124,106,247,0.15);
+}
+
+.signin-cta { margin-top: 4px; }
+.signin-privacy { color: var(--muted); font-size: 12px; margin-top: 14px; text-align: center; }
+.signin-error {
+  color: #FCA5A5;
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.25);
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+/* OTP boxes */
+.otp-row {
+  display: flex;
+  gap: 10px;
+  margin: 8px 0 18px;
+  justify-content: space-between;
+}
+.otp-box {
+  flex: 1;
+  height: 56px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  outline: none;
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.otp-box:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124,106,247,0.18);
+}
+
+.signin-meta {
+  color: var(--label);
+  font-size: 13px;
+  margin: 2px 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.signin-links {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+.link-btn {
+  background: transparent;
+  border: none;
+  color: #A78BFA;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 2px;
+  transition: color 0.15s ease;
+}
+.link-btn:hover { color: #C4B5FD; }
+
+/* Hide reCAPTCHA badge if rendered (invisible mode may still drop a container) */
+#recaptcha-container { min-height: 0; }
+.grecaptcha-badge { visibility: hidden; }
+
+/* ===== Navbar avatar ===== */
+.nav-right { display: flex; align-items: center; gap: 12px; }
+.avatar-wrap { position: relative; }
+.avatar-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6D5EE8, #8B7CF8);
+  color: #fff;
+  border: 1px solid rgba(124,106,247,0.5);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  letter-spacing: 0.02em;
+}
+.avatar-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(124,106,247,0.4); }
+.avatar-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  background: #1A1A24;
+  border: 1px solid #2A2A3A;
+  border-radius: 12px;
+  min-width: 220px;
+  padding: 6px;
+  z-index: 50;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+  animation: fadeIn 0.15s ease;
+}
+.avatar-menu-head {
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid #2A2A3A;
+  margin-bottom: 4px;
+}
+.avatar-menu-phone { color: #fff; font-size: 13px; font-weight: 500; letter-spacing: 0.02em; }
+.avatar-menu-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.avatar-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+.avatar-menu-item:hover { background: rgba(124,106,247,0.08); color: #A78BFA; }
+.avatar-menu-item.danger:hover { background: rgba(239,68,68,0.08); color: #FCA5A5; }
+
+/* ===== Account modal ===== */
+.account-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+.account-stat {
+  background: var(--input-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+}
+.account-stat-num { color: #fff; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.account-stat-label { color: var(--muted); font-size: 11px; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
