@@ -764,6 +764,38 @@
 
 .signin-cta { margin-top: 4px; }
 .signin-privacy { color: var(--muted); font-size: 12px; margin-top: 14px; text-align: center; }
+
+.demo-hint {
+  margin-top: 18px;
+  padding: 10px 12px;
+  background: rgba(124,106,247,0.06);
+  border: 1px dashed rgba(124,106,247,0.35);
+  border-radius: 10px;
+  text-align: center;
+}
+.demo-hint-label {
+  color: #A78BFA;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.demo-hint-body {
+  color: var(--label);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.demo-hint-body code {
+  background: #12121A;
+  border: 1px solid #2A2A3A;
+  color: #E8E8F0;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+  margin: 0 2px;
+}
 .signin-error {
   color: #FCA5A5;
   background: rgba(239,68,68,0.08);

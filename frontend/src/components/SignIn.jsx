@@ -252,6 +252,13 @@ export default function SignIn() {
             </button>
             {error && <div className="signin-error" data-testid="signin-error">{error}</div>}
             <div className="signin-privacy">We never share your number. Ever.</div>
+
+            <div className="demo-hint" data-testid="demo-hint">
+              <div className="demo-hint-label">Demo / testing number</div>
+              <div className="demo-hint-body">
+                Phone <code>+91 9999999999</code> · OTP <code>123456</code>
+              </div>
+            </div>
           </>
         )}
 
