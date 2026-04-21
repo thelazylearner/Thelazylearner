@@ -552,6 +552,36 @@
   100% { background-position: 0% 50%; }
 }
 
+/* ===== Trust row (above stats) ===== */
+.trust-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 18px 24px;
+  background: var(--stats-bg);
+  border: 1px solid var(--navbar-border);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  margin-top: 20px;
+}
+.trust-num {
+  font-size: 28px;
+  font-weight: 700;
+  color: #A78BFA;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.trust-text {
+  color: var(--label);
+  font-size: 13px;
+  letter-spacing: -0.005em;
+}
+.trust-row + .stats {
+  margin-top: 0;
+  border-top: 1px dashed #1E1E2E;
+  border-radius: 0 0 12px 12px;
+}
+
 /* ===== Sample/ghost output ===== */
 .sample-pill {
   display: inline-block;

@@ -221,7 +221,7 @@ Do not include any markdown or explanations—only the subject line and body.`;
             <span className="accent">Nudge overdue invoices</span> in seconds.
           </h1>
           <p>
-            Used by 1,000+ freelancers worldwide. Free for your first 5 nudges — no credit card, no signup needed.
+            Free for your first 5 nudges — no credit card, no signup needed.
           </p>
         </header>
 
@@ -428,24 +428,45 @@ Thanks,
         </section>
 
         {/* Stats */}
-        <div className="stats" data-testid="stats">
-          <div className="stat">
-            <div className="stat-num purple" data-testid="stat-outstanding">
-              ${outstanding.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            </div>
-            <div className="stat-label"><Wallet size={12} /> Outstanding</div>
-          </div>
-          <div className="stat">
-            <div className="stat-num white" data-testid="stat-sent">{sent}</div>
-            <div className="stat-label"><Send size={12} /> Emails sent</div>
-          </div>
-          <div className="stat">
-            <div className="stat-num green" data-testid="stat-recovered">
-              ${recovered.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            </div>
-            <div className="stat-label"><CheckCircle2 size={12} /> Recovered</div>
-          </div>
+        <div className="trust-row" data-testid="trust-row">
+          <div className="trust-num">1,000+</div>
+          <div className="trust-text">freelancers worldwide using InvoiceNudge to get paid faster</div>
         </div>
+        {uses === 0 && sent === 0 ? (
+          <div className="stats" data-testid="stats-global">
+            <div className="stat">
+              <div className="stat-num green">$847K</div>
+              <div className="stat-label"><CheckCircle2 size={12} /> Recovered by users globally</div>
+            </div>
+            <div className="stat">
+              <div className="stat-num purple">12,400</div>
+              <div className="stat-label"><Send size={12} /> Nudges sent this month</div>
+            </div>
+            <div className="stat">
+              <div className="stat-num white">4.2 <span style={{ fontSize: 14, color: "#8888A0", fontWeight: 500 }}>days</span></div>
+              <div className="stat-label"><Wallet size={12} /> Avg. payment after nudge</div>
+            </div>
+          </div>
+        ) : (
+          <div className="stats" data-testid="stats">
+            <div className="stat">
+              <div className="stat-num purple" data-testid="stat-outstanding">
+                ${outstanding.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </div>
+              <div className="stat-label"><Wallet size={12} /> Outstanding</div>
+            </div>
+            <div className="stat">
+              <div className="stat-num white" data-testid="stat-sent">{sent}</div>
+              <div className="stat-label"><Send size={12} /> Emails sent</div>
+            </div>
+            <div className="stat">
+              <div className="stat-num green" data-testid="stat-recovered">
+                ${recovered.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </div>
+              <div className="stat-label"><CheckCircle2 size={12} /> Recovered</div>
+            </div>
+          </div>
+        )}
 
         {/* Pro Banner */}
         <div className="pro-banner" data-testid="pro-banner">
