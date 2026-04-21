@@ -24,6 +24,7 @@ const STORAGE = {
   outstanding: "invoicenudge_outstanding",
   recovered: "invoicenudge_recovered",
   history: "invoicenudge_history",
+  pending: "invoicenudge_pending",
 };
 
 const TONES = [
@@ -75,11 +76,100 @@ function App() {
   const [slowHint, setSlowHint] = useState(false);
   const slowTimerRef = useRef(null);
   const outputRef = useRef(null);
+  const [recoveryPrompt, setRecoveryPrompt] = useState(null); // { client, amount, invoice }
+  const [recoveryWin, setRecoveryWin] = useState(null); // { client, amount } after mark-paid
 
   const [uses, setUses] = useLocalNumber(STORAGE.uses);
   const [sent, setSent] = useLocalNumber(STORAGE.sent);
   const [outstanding, setOutstanding] = useLocalNumber(STORAGE.outstanding);
-  const [recovered] = useLocalNumber(STORAGE.recovered);
+  const [recovered, setRecovered] = useLocalNumber(STORAGE.recovered);
+
+  // On session open, surface the most recent pending invoice (generated in a prior session).
+  useEffect(() => {
+    try {
+      const now = Date.now();
+      const sessionKey = "invoicenudge_session_start";
+      if (!sessionStorage.getItem(sessionKey)) {
+        sessionStorage.setItem(sessionKey, String(now));
+      }
+      const sessionStart = Number(sessionStorage.getItem(sessionKey));
+      const pending = JSON.parse(localStorage.getItem(STORAGE.pending) || "[]");
+      const prior = pending.filter((p) => p.at < sessionStart);
+      if (prior.length > 0) {
+        setRecoveryPrompt(prior[prior.length - 1]);
+      }
+    } catch { /* noop */ }
+  }, []);
+
+  const fireConfetti = () => {
+    const run = () => {
+      const confetti = window.confetti;
+      if (!confetti) return;
+      confetti({
+        particleCount: 120,
+        spread: 75,
+        startVelocity: 45,
+        origin: { y: 0.6 },
+        colors: ["#7C6AF7", "#A78BFA", "#34D399", "#FFFFFF"],
+      });
+      setTimeout(() => confetti({
+        particleCount: 80, spread: 100, startVelocity: 30,
+        origin: { x: 0.2, y: 0.7 }, colors: ["#7C6AF7", "#A78BFA"],
+      }), 220);
+      setTimeout(() => confetti({
+        particleCount: 80, spread: 100, startVelocity: 30,
+        origin: { x: 0.8, y: 0.7 }, colors: ["#34D399", "#A78BFA"],
+      }), 420);
+    };
+    if (window.confetti) run();
+    else {
+      // wait up to ~800ms for the CDN script to load
+      let tries = 0;
+      const iv = setInterval(() => {
+        tries++;
+        if (window.confetti) { clearInterval(iv); run(); }
+        else if (tries > 16) clearInterval(iv);
+      }, 50);
+    }
+  };
+
+  const markRecovered = () => {
+    if (!recoveryPrompt) return;
+    const amt = Number(recoveryPrompt.amount) || 0;
+    setRecovered(recovered + amt);
+    setOutstanding(Math.max(0, outstanding - amt));
+    try {
+      const pending = JSON.parse(localStorage.getItem(STORAGE.pending) || "[]");
+      const next = pending.filter((p) => p.at !== recoveryPrompt.at);
+      localStorage.setItem(STORAGE.pending, JSON.stringify(next));
+    } catch { /* noop */ }
+    fireConfetti();
+    setRecoveryWin({ client: recoveryPrompt.client, amount: amt });
+    setRecoveryPrompt(null);
+  };
+
+  const dismissRecovery = () => {
+    if (!recoveryPrompt) return;
+    try {
+      const pending = JSON.parse(localStorage.getItem(STORAGE.pending) || "[]");
+      const next = pending.filter((p) => p.at !== recoveryPrompt.at);
+      localStorage.setItem(STORAGE.pending, JSON.stringify(next));
+    } catch { /* noop */ }
+    setRecoveryPrompt(null);
+  };
+
+  const shareWin = async () => {
+    if (!recoveryWin) return;
+    const text = `I just recovered $${recoveryWin.amount.toLocaleString()} from an overdue invoice using InvoiceNudge. Get paid faster 👉`;
+    const url = window.location.origin;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "I got paid!", text, url });
+      } else {
+        await navigator.clipboard.writeText(`${text} ${url}`);
+      }
+    } catch { /* noop */ }
+  };
 
   const onChange = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -178,6 +268,15 @@ Do not include any markdown or explanations—only the subject line and body.`;
           subject: parsed.subject,
         });
         localStorage.setItem(STORAGE.history, JSON.stringify(history));
+        // Add to pending-recovery list (so we can ask "Did they pay?" on the next session)
+        const pending = JSON.parse(localStorage.getItem(STORAGE.pending) || "[]");
+        pending.push({
+          at: Date.now(),
+          client: form.clientName,
+          invoice: form.invoiceNumber,
+          amount: amt,
+        });
+        localStorage.setItem(STORAGE.pending, JSON.stringify(pending));
       } catch { /* noop */ }
       setCounterFlash(true);
       setTimeout(() => setCounterFlash(false), 500);
@@ -219,12 +318,27 @@ Do not include any markdown or explanations—only the subject line and body.`;
             </span>
             <span>InvoiceNudge</span>
           </div>
-          <div className={`nav-pill ${counterFlash ? "flash" : ""}`} data-testid="nudge-counter">
-            <span className={`nav-pill-dot ${uses >= FREE_LIMIT ? "red" : "green"}`} />
-            <span>
-              {uses} / {FREE_LIMIT} nudges used
-            </span>
-          </div>
+          {(() => {
+            const remaining = Math.max(0, FREE_LIMIT - uses);
+            let variant = "green";
+            let msg = `${remaining} free nudges remaining`;
+            let clickable = false;
+            if (uses === 3) { variant = "amber"; msg = "Warning: 2 nudges remaining"; }
+            else if (uses === 4) { variant = "orange"; msg = "1 nudge remaining — Upgrade to keep going"; clickable = true; }
+            else if (uses >= FREE_LIMIT) { variant = "red"; msg = "No nudges left — Upgrade for unlimited"; clickable = true; }
+            return (
+              <button
+                type="button"
+                className={`nav-pill pill-${variant} ${counterFlash ? "flash" : ""} ${clickable ? "clickable" : ""}`}
+                data-testid="nudge-counter"
+                onClick={() => clickable && setShowPro(true)}
+                disabled={!clickable}
+              >
+                <span className={`nav-pill-dot ${variant}`} />
+                <span>{msg}</span>
+              </button>
+            );
+          })()}
         </div>
       </nav>
 
@@ -511,6 +625,42 @@ Thanks,
             Upgrade — $7/mo
           </button>
         </div>
+
+        {recoveryPrompt && (
+          <div className="recovery-card" data-testid="recovery-card">
+            <div className="recovery-left">
+              <div className="recovery-icon">
+                <CheckCircle2 size={18} />
+              </div>
+              <div>
+                <div className="recovery-title">
+                  Did <span className="recovery-client">{recoveryPrompt.client}</span> pay?
+                </div>
+                <div className="recovery-sub">
+                  Mark ${Number(recoveryPrompt.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} invoice as recovered
+                </div>
+              </div>
+            </div>
+            <div className="recovery-actions">
+              <button
+                type="button"
+                className="recovery-dismiss"
+                data-testid="recovery-dismiss"
+                onClick={dismissRecovery}
+              >
+                Not yet
+              </button>
+              <button
+                type="button"
+                className="recovery-confirm"
+                data-testid="recovery-confirm"
+                onClick={markRecovered}
+              >
+                <CheckCircle2 size={14} /> Mark as recovered
+              </button>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Pro Modal */}
@@ -591,6 +741,44 @@ Thanks,
             </button>
             <div className="modal-footnote">
               Free tier resets are coming soon — stay tuned.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {recoveryWin && (
+        <div className="modal-overlay" onClick={() => setRecoveryWin(null)}>
+          <div className="modal" data-testid="win-modal" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              data-testid="win-modal-close"
+              className="modal-close"
+              onClick={() => setRecoveryWin(null)}
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
+            <div className="modal-bolt" style={{ background: "rgba(52,211,153,0.12)", borderColor: "rgba(52,211,153,0.3)", color: "#34D399", boxShadow: "0 0 24px rgba(52,211,153,0.2)" }}>
+              <CheckCircle2 size={24} />
+            </div>
+            <h3 className="modal-title">You got paid! 🎉</h3>
+            <div className="modal-price" style={{ color: "#34D399" }}>
+              +${recoveryWin.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            </div>
+            <div className="modal-cancel">recovered from {recoveryWin.client}</div>
+            <div style={{ color: "var(--label)", fontSize: 14, marginBottom: 22, lineHeight: 1.5 }}>
+              Your follow-up worked. Share your win and help another freelancer get paid too.
+            </div>
+            <button
+              type="button"
+              data-testid="share-win"
+              className="modal-cta"
+              onClick={shareWin}
+            >
+              Share your win
+            </button>
+            <div className="modal-footnote">
+              Every recovered invoice helps our live "recovered globally" counter grow.
             </div>
           </div>
         </div>
