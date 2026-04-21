@@ -390,19 +390,40 @@ Do not include any markdown or explanations—only the subject line and body.`;
               </div>
             </div>
           ) : (
-            <div className="output-wrap ghost">
-              <div className="output-inner">
-                <div className="empty-output" data-testid="output-empty">
-                  <div className="dot pulse"><Mail size={22} /></div>
-                  <div style={{ color: "#E8E8F0", fontSize: 14, fontWeight: 500 }}>
-                    Your professional follow-up is one click away
+            <>
+              <div className="sample-pill" data-testid="sample-pill">Sample output</div>
+              <div className="output-wrap ghost sample" data-testid="output-empty">
+                <div className="output-inner">
+                  <div className="card-header" style={{ marginBottom: 16 }}>
+                    <span className="card-header-icon"><Mail size={16} /></span>
+                    <span className="card-title">Generated Email</span>
+                    <span className="card-sub">Preview</span>
                   </div>
-                  <div style={{ fontSize: 13 }}>
-                    Fill in the details on the left, pick your tone, and generate. Takes 10 seconds.
+                  <div className="subject-line">
+                    <span className="subject-label">Subject:</span>
+                    <span className="subject-text">
+                      Follow-up: Invoice #INV-2025-047 — Payment Overdue
+                    </span>
+                  </div>
+                  <div className="body-text" aria-hidden="true" style={{ whiteSpace: "pre-wrap" }}>
+{`Hi [Client Name],
+
+I hope you're doing well. I wanted to follow up on Invoice #INV-2025-047 for $2,400.00, which was due 14 days ago.
+
+Could you let me know when I can expect payment?
+
+Thanks,
+[Your Name]`}
+                  </div>
+                  <div className="output-actions">
+                    <span style={{ color: "var(--muted)", fontSize: 12 }}>
+                      Fill in the form → your real email appears here
+                    </span>
+                    <button type="button" className="copy-btn" tabIndex={-1}>Copy email</button>
                   </div>
                 </div>
               </div>
-            </div>
+            </>
           )}
         </section>
 
