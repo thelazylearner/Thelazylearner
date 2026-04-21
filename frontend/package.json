@@ -58,7 +58,7 @@
   },
   "scripts": {
     "start": "craco start",
-    "build": "craco build",
+    "build": "npm install --legacy-peer-deps && craco build",
     "test": "craco test"
   },
   "browserslist": {
