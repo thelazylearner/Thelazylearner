@@ -214,6 +214,25 @@
   letter-spacing: -0.005em;
   line-height: 1.4;
 }
+.input-wrap {
+  position: relative;
+}
+.char-counter {
+  position: absolute;
+  right: 12px;
+  bottom: 9px;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--input-bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  transition: color 0.15s ease;
+}
+.char-counter.amber { color: #FCD34D; }
+.char-counter.red { color: #F87171; }
 .slow-hint {
   margin-top: 12px;
   font-size: 13px;

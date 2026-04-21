@@ -61,6 +61,7 @@ function App() {
     clientName: "",
     amount: "",
     invoiceNumber: "",
+    workDone: "",
     daysOverdue: "",
     yourName: "",
   });
@@ -140,11 +141,15 @@ function App() {
     const invoiceLine = form.invoiceNumber.trim()
       ? `- Invoice number: ${form.invoiceNumber}`
       : `- Invoice number: (not provided — refer generically, do NOT invent a number)`;
+    const workLine = form.workDone.trim()
+      ? `- Work done / service description: ${form.workDone.trim()}`
+      : `- Work done: (not provided — do NOT invent services, never leave [service] placeholder)`;
     return `You are writing the ${attemptOrdinal} email in a 3-email follow-up sequence for an overdue invoice.
 
 Invoice context:
 - Client name: ${form.clientName}
 ${invoiceLine}
+${workLine}
 - Amount due: ${form.amount}
 - Original days overdue (at start of sequence): ${form.daysOverdue}
 - Sender: ${form.yourName}
@@ -156,6 +161,8 @@ Tone guidance:
 - Friendly: warm, polite, assumes it's an oversight
 - Firm: professional, direct, mentions terms and requests immediate action
 - Final Notice: serious, references potential next steps (late fees, collections) while remaining professional
+
+If a work/service description is provided, weave it naturally into the body to remind the client of the value they received. Do not just append it — integrate it as a core part of the narrative. Never leave a placeholder like [service] in the email.
 
 Output format (strict):
 Subject: <one concise subject line>
@@ -319,11 +326,15 @@ Do not include markdown or explanations — only the subject line and body.`;
     const invoiceLine = form.invoiceNumber.trim()
       ? `- Invoice number: ${form.invoiceNumber}`
       : `- Invoice number: (not provided — refer to the invoice generically, e.g. "your recent invoice" or "the outstanding invoice"; do NOT invent a number)`;
+    const workLine = form.workDone.trim()
+      ? `- Work done / service description: ${form.workDone.trim()}`
+      : `- Work done: (not provided — do NOT invent specific services, and never leave a placeholder like [service] in the email)`;
     return `You are an expert freelancer writing a ${toneLabel.toLowerCase()} follow-up email for an overdue invoice.
 
 Details:
 - Client name: ${form.clientName}
 ${invoiceLine}
+${workLine}
 - Amount due: ${form.amount}
 - Days overdue: ${form.daysOverdue}
 - Sender: ${form.yourName}
@@ -332,6 +343,8 @@ Tone guidance:
 - Friendly: warm, polite, assumes it's an oversight
 - Firm: professional, direct, mentions terms and requests immediate action
 - Final Notice: serious, references potential next steps (late fees, collections) while remaining professional
+
+If a work/service description is provided, weave it naturally into the email body in a way that reminds the client of the value they received. Do not just append it — integrate it as a core part of the narrative. The goal is to trigger the client's memory of the work and create a sense of reciprocal obligation to pay. If not provided, reference only the invoice number and amount. Never leave a blank placeholder like [service] in the email.
 
 Output format (strict):
 Subject: <one concise subject line>
@@ -547,6 +560,31 @@ Do not include any markdown or explanations—only the subject line and body.`;
                     onChange={(e) => onChange("invoiceNumber", e.target.value)}
                     placeholder="e.g. INV-047  (leave blank if unknown)"
                   />
+                </div>
+                <div className="field full">
+                  <label>
+                    Work Done <span className="label-optional">(optional)</span>
+                  </label>
+                  <div className="input-wrap">
+                    <input
+                      data-testid="input-work-done"
+                      value={form.workDone}
+                      maxLength={120}
+                      onChange={(e) => onChange("workDone", e.target.value.slice(0, 120))}
+                      placeholder="e.g. Logo design, website redesign, 3 social media templates"
+                    />
+                    {form.workDone.length > 0 && (
+                      <span
+                        className={`char-counter ${form.workDone.length >= 120 ? "red" : form.workDone.length > 100 ? "amber" : ""}`}
+                        data-testid="work-done-counter"
+                      >
+                        {form.workDone.length} / 120
+                      </span>
+                    )}
+                  </div>
+                  <div className="field-help">
+                    Mentioning your work makes clients 3x more likely to pay promptly.
+                  </div>
                 </div>
                 <div className="field">
                   <label>Days Overdue</label>
