@@ -14,7 +14,12 @@ import {
   Lock,
   Clock,
   ChevronDown,
+  LogOut,
+  User as UserIcon,
 } from "lucide-react";
+import { useAuth, FREE_LIMIT as USER_FREE_LIMIT } from "@/lib/auth";
+import SignIn from "@/components/SignIn";
+import AuthGate from "@/components/AuthGate";
 
 const GEMINI_API_KEY = "AIzaSyDec_AOK4e6xj30WQHgvpsldn68i_AEppg";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
@@ -57,6 +62,17 @@ function BoltIcon({ size = 16 }) {
 }
 
 function App() {
+  const { user, profile, ready, signInGoogle, signOut, recordNudge, updateProfile } = useAuth();
+  const [showSignIn, setShowSignIn] = useState(false);
+  const [showAuthGate, setShowAuthGate] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    const onClickOutside = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
   const [form, setForm] = useState({
     clientName: "",
     amount: "",
@@ -111,10 +127,15 @@ function App() {
   const [leftTab, setLeftTab] = useState("details"); // "details" | "sequence"
   const [isPro, setIsPro] = useState(() => localStorage.getItem("invoicenudge_is_pro") === "true");
   useEffect(() => {
+    if (user) setIsPro(!!profile?.isPro);
+    else setIsPro(localStorage.getItem("invoicenudge_is_pro") === "true");
+  }, [user, profile]);
+  useEffect(() => {
+    if (user) return; // Only listen to LS changes when signed-out
     const h = () => setIsPro(localStorage.getItem("invoicenudge_is_pro") === "true");
     window.addEventListener("storage", h);
     return () => window.removeEventListener("storage", h);
-  }, []);
+  }, [user]);
   const SEQUENCE_DEFAULTS = [
     { day: 1, tone: "friendly" },
     { day: 7, tone: "firm" },
@@ -171,6 +192,10 @@ Do not include markdown or explanations — only the subject line and body.`;
   };
 
   const generateSequenceStep = async (idx) => {
+    if (!user) {
+      setShowAuthGate(true);
+      return;
+    }
     if (idx > 0 && !isPro) {
       trackUpgradeClick();
       setShowPro(true);
@@ -219,13 +244,24 @@ Do not include markdown or explanations — only the subject line and body.`;
     setTimeout(() => setToast(""), 3500);
   };
 
-  const [uses, setUses] = useLocalNumber(STORAGE.uses);
-  const [sent, setSent] = useLocalNumber(STORAGE.sent);
-  const [outstanding, setOutstanding] = useLocalNumber(STORAGE.outstanding);
-  const [recovered, setRecovered] = useLocalNumber(STORAGE.recovered);
+  const [usesLocal, setUsesLocal] = useLocalNumber(STORAGE.uses);
+  const [sentLocal, setSentLocal] = useLocalNumber(STORAGE.sent);
+  const [outstandingLocal, setOutstandingLocal] = useLocalNumber(STORAGE.outstanding);
+  const [recoveredLocal, setRecoveredLocal] = useLocalNumber(STORAGE.recovered);
+
+  // Effective values: Firestore profile when signed in, localStorage otherwise.
+  const uses = user ? (profile?.nudgesUsed || 0) : usesLocal;
+  const sent = user ? (profile?.nudgesUsed || 0) : sentLocal;
+  const outstanding = user ? (profile?.outstanding || 0) : outstandingLocal;
+  const recovered = user ? (profile?.recovered || 0) : recoveredLocal;
+  const setUses = (v) => user ? recordNudge() : setUsesLocal(v);
+  const setSent = (v) => user ? null : setSentLocal(v);
+  const setOutstanding = (v) => user ? updateProfile({ outstanding: v }) : setOutstandingLocal(v);
+  const setRecovered = (v) => user ? updateProfile({ recovered: v }) : setRecoveredLocal(v);
 
   // On session open, surface the most recent pending invoice (generated in a prior session).
   useEffect(() => {
+    if (!ready) return;
     try {
       const now = Date.now();
       const sessionKey = "invoicenudge_session_start";
@@ -233,13 +269,14 @@ Do not include markdown or explanations — only the subject line and body.`;
         sessionStorage.setItem(sessionKey, String(now));
       }
       const sessionStart = Number(sessionStorage.getItem(sessionKey));
-      const pending = JSON.parse(localStorage.getItem(STORAGE.pending) || "[]");
+      const pending = user ? (profile?.pending || []) : (() => {
+        try { return JSON.parse(localStorage.getItem(STORAGE.pending) || "[]"); } catch { return []; }
+      })();
       const prior = pending.filter((p) => p.at < sessionStart);
-      if (prior.length > 0) {
-        setRecoveryPrompt(prior[prior.length - 1]);
-      }
+      if (prior.length > 0) setRecoveryPrompt(prior[prior.length - 1]);
+      else setRecoveryPrompt(null);
     } catch { /* noop */ }
-  }, []);
+  }, [ready, user, profile]);
 
   const fireConfetti = () => {
     const run = () => {
@@ -278,11 +315,16 @@ Do not include markdown or explanations — only the subject line and body.`;
     const amt = Number(recoveryPrompt.amount) || 0;
     setRecovered(recovered + amt);
     setOutstanding(Math.max(0, outstanding - amt));
-    try {
-      const pending = JSON.parse(localStorage.getItem(STORAGE.pending) || "[]");
-      const next = pending.filter((p) => p.at !== recoveryPrompt.at);
-      localStorage.setItem(STORAGE.pending, JSON.stringify(next));
-    } catch { /* noop */ }
+    if (user) {
+      const next = (profile?.pending || []).filter((p) => p.at !== recoveryPrompt.at);
+      updateProfile({ pending: next });
+    } else {
+      try {
+        const pending = JSON.parse(localStorage.getItem(STORAGE.pending) || "[]");
+        const next = pending.filter((p) => p.at !== recoveryPrompt.at);
+        localStorage.setItem(STORAGE.pending, JSON.stringify(next));
+      } catch { /* noop */ }
+    }
     fireConfetti();
     setRecoveryWin({ client: recoveryPrompt.client, amount: amt });
     setRecoveryPrompt(null);
@@ -290,11 +332,16 @@ Do not include markdown or explanations — only the subject line and body.`;
 
   const dismissRecovery = () => {
     if (!recoveryPrompt) return;
-    try {
-      const pending = JSON.parse(localStorage.getItem(STORAGE.pending) || "[]");
-      const next = pending.filter((p) => p.at !== recoveryPrompt.at);
-      localStorage.setItem(STORAGE.pending, JSON.stringify(next));
-    } catch { /* noop */ }
+    if (user) {
+      const next = (profile?.pending || []).filter((p) => p.at !== recoveryPrompt.at);
+      updateProfile({ pending: next });
+    } else {
+      try {
+        const pending = JSON.parse(localStorage.getItem(STORAGE.pending) || "[]");
+        const next = pending.filter((p) => p.at !== recoveryPrompt.at);
+        localStorage.setItem(STORAGE.pending, JSON.stringify(next));
+      } catch { /* noop */ }
+    }
     setRecoveryPrompt(null);
   };
 
@@ -372,7 +419,11 @@ Do not include any markdown or explanations—only the subject line and body.`;
       setTimeout(() => setToast(""), 3000);
       return;
     }
-    if (uses >= FREE_LIMIT) {
+    if (!user) {
+      setShowAuthGate(true);
+      return;
+    }
+    if (uses >= FREE_LIMIT && !isPro) {
       setShowLimit(true);
       return;
     }
@@ -404,25 +455,33 @@ Do not include any markdown or explanations—only the subject line and body.`;
       setSent(sent + 1);
       setOutstanding(outstanding + amt);
       try {
-        const history = JSON.parse(localStorage.getItem(STORAGE.history) || "[]");
-        history.push({
-          at: Date.now(),
-          client: form.clientName,
-          invoice: form.invoiceNumber,
-          amount: amt,
-          tone,
-          subject: parsed.subject,
-        });
-        localStorage.setItem(STORAGE.history, JSON.stringify(history));
-        // Add to pending-recovery list (so we can ask "Did they pay?" on the next session)
-        const pending = JSON.parse(localStorage.getItem(STORAGE.pending) || "[]");
-        pending.push({
-          at: Date.now(),
-          client: form.clientName,
-          invoice: form.invoiceNumber,
-          amount: amt,
-        });
-        localStorage.setItem(STORAGE.pending, JSON.stringify(pending));
+        if (user) {
+          // Append to Firestore arrays (read current then write back via merge).
+          const histEntry = {
+            at: Date.now(),
+            client: form.clientName,
+            invoice: form.invoiceNumber,
+            amount: amt,
+            tone,
+            subject: parsed.subject,
+          };
+          await updateProfile({
+            history: [...(profile?.history || []), histEntry],
+            pending: [...(profile?.pending || []), {
+              at: Date.now(),
+              client: form.clientName,
+              invoice: form.invoiceNumber,
+              amount: amt,
+            }],
+          });
+        } else {
+          const history = JSON.parse(localStorage.getItem(STORAGE.history) || "[]");
+          history.push({ at: Date.now(), client: form.clientName, invoice: form.invoiceNumber, amount: amt, tone, subject: parsed.subject });
+          localStorage.setItem(STORAGE.history, JSON.stringify(history));
+          const pending = JSON.parse(localStorage.getItem(STORAGE.pending) || "[]");
+          pending.push({ at: Date.now(), client: form.clientName, invoice: form.invoiceNumber, amount: amt });
+          localStorage.setItem(STORAGE.pending, JSON.stringify(pending));
+        }
       } catch { /* noop */ }
       setCounterFlash(true);
       setTimeout(() => setCounterFlash(false), 500);
@@ -473,16 +532,58 @@ Do not include any markdown or explanations—only the subject line and body.`;
             else if (uses === 4) { variant = "orange"; msg = "1 nudge remaining — Upgrade to keep going"; clickable = true; }
             else if (uses >= FREE_LIMIT) { variant = "red"; msg = "No nudges left — Upgrade for unlimited"; clickable = true; }
             return (
-              <button
-                type="button"
-                className={`nav-pill pill-${variant} ${counterFlash ? "flash" : ""} ${clickable ? "clickable" : ""}`}
-                data-testid="nudge-counter"
-                onClick={() => clickable && setShowPro(true)}
-                disabled={!clickable}
-              >
-                <span className={`nav-pill-dot ${variant}`} />
-                <span>{msg}</span>
-              </button>
+              <div className="nav-right">
+                <button
+                  type="button"
+                  className={`nav-pill pill-${variant} ${counterFlash ? "flash" : ""} ${clickable ? "clickable" : ""}`}
+                  data-testid="nudge-counter"
+                  onClick={() => clickable && setShowPro(true)}
+                  disabled={!clickable}
+                >
+                  <span className={`nav-pill-dot ${variant}`} />
+                  <span>{user ? `${uses} / ${FREE_LIMIT} this month` : msg}</span>
+                </button>
+                {!user ? (
+                  <button
+                    type="button"
+                    className="nav-signin"
+                    data-testid="nav-signin"
+                    onClick={() => setShowSignIn(true)}
+                  >
+                    Sign In
+                  </button>
+                ) : (
+                  <div className="avatar-wrap" ref={menuRef}>
+                    <button
+                      type="button"
+                      className="avatar-btn"
+                      data-testid="avatar-button"
+                      onClick={() => setMenuOpen((v) => !v)}
+                      aria-label="Account menu"
+                    >
+                      {profile?.photoURL
+                        ? <img src={profile.photoURL} alt="" className="avatar-img" />
+                        : (profile?.displayName || profile?.email || "U").slice(0, 1).toUpperCase()}
+                    </button>
+                    {menuOpen && (
+                      <div className="avatar-menu" data-testid="avatar-menu">
+                        <div className="avatar-menu-head">
+                          <div className="avatar-menu-phone">{profile?.displayName || "Welcome"}</div>
+                          <div className="avatar-menu-sub">{profile?.email}</div>
+                        </div>
+                        <button
+                          type="button"
+                          className="avatar-menu-item danger"
+                          data-testid="menu-signout"
+                          onClick={() => { setMenuOpen(false); signOut(); }}
+                        >
+                          <LogOut size={14} /> Sign out
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             );
           })()}
         </div>
@@ -1078,6 +1179,23 @@ Thanks,
             </div>
           </div>
         </div>
+      )}
+
+      {showSignIn && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "var(--bg)", overflow: "auto" }}>
+          <SignIn onClose={() => setShowSignIn(false)} />
+        </div>
+      )}
+
+      {showAuthGate && (
+        <AuthGate
+          onClose={() => setShowAuthGate(false)}
+          onGoogle={async () => {
+            try { await signInGoogle(); setShowAuthGate(false); }
+            catch (e) { console.error(e); }
+          }}
+          onEmail={() => { setShowAuthGate(false); setShowSignIn(true); }}
+        />
       )}
 
       {toast && (
